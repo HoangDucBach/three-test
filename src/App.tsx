@@ -22,37 +22,28 @@ function App() {
 
   const walls: {
     position: [number, number, number];
-    scale: [number, number, number];
+    size: [number, number, number];
   }[] = [
       {
-        position: [5, 0, 5],
-        scale: [5, 2, 2],
+        position: [0, 0, 1],
+        size: [4, 4, 1],
       },
     ];
 
   const frames: FrameProps[] = [
     {
       src: PICTURES.PICTURE_1,
-      wall: {
-        position: [5, 0, 5],
-        scale: [5, 2, 2],
-      },
+      wall: walls[0],
       frames: [],
     },
     {
       src: PICTURES.PICTURE_2,
-      wall: {
-        position: [5, 0, 5],
-        scale: [5, 2, 2],
-      },
+      wall: walls[0],
       frames: [],
     },
     {
       src: PICTURES.PICTURE_3,
-      wall: {
-        position: [5, 0, 5],
-        scale: [5, 2, 2],
-      },
+      wall: walls[0],
       frames: [],
     },
   ];
@@ -74,33 +65,33 @@ function App() {
           <gridHelper args={[100, 100]} position={[0, 0, 0]} />
           <axesHelper args={[100]} />
           <RaycasterHelper />
-          <Wall position={walls[0].position} scale={walls[0].scale} />
+          <Wall position={walls[0].position} size={walls[0].size} />
           <Frame
             src={frames[0].src}
             wall={frames[0].wall}
             side="front"
-            u={0}
-            v={10}
-            frames={frames}
+            u={2}
+            v={0}
+            frames={frames} 
           />
 
           <Frame
             src={frames[1].src}
             wall={frames[1].wall}
             side="front"
-            u={0}
+            u={-5}
             v={0}
             frames={frames}
           />
 
-          <Frame
+          {/* <Frame
             src={frames[2].src}
             wall={frames[2].wall}
             side="front"
             u={0}
             v={-10}
             frames={frames}
-          />
+          /> */}
           <Control
             isLocked={isCameraLocked}
             wallPositions={walls.map((wall) => wall.position)}

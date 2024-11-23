@@ -13,6 +13,8 @@ export interface FrameProps extends React.ComponentProps<"mesh"> {
     frames: FrameProps[]; // All frames in the scene
 }
 
+let movingFrameRef: THREE.Mesh | null = null;
+
 export function Frame({ ...props }: FrameProps) {
     const {
         src,
@@ -25,7 +27,6 @@ export function Frame({ ...props }: FrameProps) {
     const { camera, raycaster, mouse } = useThree();
 
     const frameRef = useRef<THREE.Mesh | null>(null);
-    const lightRef = useRef<THREE.SpotLight>(null);
 
     const [canMove, setCanMove] = useState(false);
     const [currentPosition, setCurrentPosition] = useState(new THREE.Vector3());
@@ -38,10 +39,19 @@ export function Frame({ ...props }: FrameProps) {
     const DEFAULT_SCALE = new THREE.Vector3(1, 1, 0.1);
 
     const checkCollision = (newPosition: THREE.Vector3) => {
+        const currentBox = new THREE.Box3().setFromCenterAndSize(
+            newPosition,
+            DEFAULT_SCALE
+        );
+
         for (const otherFrame of frames) {
             if (otherFrame !== props) {
-                const dist = newPosition.distanceTo(new THREE.Vector3(...otherFrame.wall.position));
-                if (dist < 1) {
+                const otherBox = new THREE.Box3().setFromCenterAndSize(
+                    getPosition(new THREE.Vector3(...otherFrame.wall.position), new THREE.Vector3(...otherFrame.wall.size)),
+                    DEFAULT_SCALE
+                );
+
+                if (currentBox.intersectsBox(otherBox)) {
                     return true;
                 }
             }
@@ -68,43 +78,24 @@ export function Frame({ ...props }: FrameProps) {
                 break;
         }
 
-        const plane = new THREE.Plane(normal, -wallPosition.dot(normal));
+        const plane = new THREE.Plane();
+        plane.setFromNormalAndCoplanarPoint(normal, wallPosition);
+
         return plane;
     };
 
-    const getPosition = (position: THREE.Vector3, scale: THREE.Vector3) => {
+    const getPosition = (position: THREE.Vector3, size: THREE.Vector3) => {
         const wallPosition = position.clone();
-        const wallScale = scale.clone();
+        const wallScale = size.clone();
 
         const newPosition = new THREE.Vector3();
 
         switch (side) {
             case "front": // Plane xy
                 newPosition.set(
-                    THREE.MathUtils.clamp(wallPosition.x + wallScale.z / 2 + v, -(wallPosition.z + wallScale.z / 2), wallPosition.z + wallScale.z / 2),
-                    wallPosition.y + wallScale.y + u,
-                    wallPosition.z + wallScale.z
-                );
-                break;
-            case "back": // Plane xy
-                newPosition.set(
-                    wallPosition.x - wallScale.x - v,
-                    wallPosition.y + wallScale.y + u,
-                    wallPosition.z + wallScale.z
-                );
-                break;
-            case "left": // Plane yz
-                newPosition.set(
-                    wallPosition.x + wallScale.x,
-                    wallPosition.y + wallScale.y + u,
-                    wallPosition.z + wallScale.z + v
-                );
-                break;
-            case "right": // Plane yz
-                newPosition.set(
-                    wallPosition.x + wallScale.x,
-                    wallPosition.y + wallScale.y + u,
-                    wallPosition.z - wallScale.z - v
+                    THREE.MathUtils.clamp(wallPosition.x + u, wallPosition.x - wallScale.x, wallPosition.x + wallScale.x),
+                    THREE.MathUtils.clamp(wallPosition.y + v, wallPosition.y - wallScale.y, wallPosition.y + wallScale.y),
+                    wallPosition.z + wallScale.z / 2
                 );
                 break;
         }
@@ -113,13 +104,19 @@ export function Frame({ ...props }: FrameProps) {
     };
 
     useEffect(() => {
-        setCurrentPosition(getPosition(new THREE.Vector3(...wall.position), new THREE.Vector3(...wall.scale)));
+        setCurrentPosition(getPosition(new THREE.Vector3(...wall.position), new THREE.Vector3(...wall.size)));
     }, []);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key.toLowerCase() === "m" && isHovered && !checkCollision(currentPosition)) {
-                setCanMove((prev) => !prev);
+            if (event.key.toLowerCase() === "m" && isHovered) {
+                if (canMove) {
+                    setCanMove(false);
+                    movingFrameRef = null;
+                } else if (!movingFrameRef) {
+                    setCanMove(true);
+                    movingFrameRef = frameRef.current;
+                }
             }
         };
 
@@ -133,40 +130,37 @@ export function Frame({ ...props }: FrameProps) {
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [isHovered]);
+    }, [isHovered, canMove]);
 
     useFrame(() => {
-        if (canMove && frameRef.current) {
+        if (canMove && frameRef.current === movingFrameRef) {
             const plane = getWallPlane();
             const intersection = new THREE.Vector3();
 
             raycaster.setFromCamera(mouse, camera);
             if (raycaster.ray.intersectPlane(plane, intersection)) {
-                frameRef.current.position.copy(
-                    new THREE.Vector3(
-                        THREE.MathUtils.clamp(intersection.x, -(wall.position[0] + wall.scale[0] / 2), wall.position[0] + wall.scale[0] / 2),
-                        THREE.MathUtils.clamp(intersection.y, -(wall.position[1] + wall.scale[1] / 2), wall.position[1] + wall.scale[1] / 2),
-                        THREE.MathUtils.clamp(intersection.z + wall.scale[2], wall.position[2], wall.position[2] + wall.scale[2] * 2)
-                    )
+                const newPosition = new THREE.Vector3(
+                    THREE.MathUtils.clamp(intersection.x, wall.position[0] - wall.size[0], wall.position[0] + wall.size[0]),
+                    THREE.MathUtils.clamp(intersection.y, wall.position[1] - wall.size[1], wall.position[1] + wall.size[1]),
+                    intersection.z + wall.size[2] / 2
                 );
+
+                if (!checkCollision(newPosition)) {
+                    if (frameRef.current) {
+                        frameRef.current.position.copy(newPosition);
+                    }
+                }
             }
         } else if (frameRef.current) {
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObject(frameRef.current);
             setIsHovered(intersects.length > 0);
-
-        }
-
-        if (lightRef.current) {
-            lightRef.current.target.position.set(...currentPosition.toArray());
-            lightRef.current.target.updateMatrixWorld();
         }
     });
 
     return (
         <mesh
             ref={frameRef}
-            scale={DEFAULT_SCALE}
             position={currentPosition}
         >
             <boxGeometry args={DEFAULT_SCALE.toArray()} />

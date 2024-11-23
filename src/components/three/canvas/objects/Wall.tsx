@@ -5,9 +5,9 @@ import { TEXTURES } from '../../../../assets/textures/textures';
 
 export interface WallProps extends React.ComponentProps<'mesh'> {
     position: [number, number, number];
-    scale: [number, number, number];
+    size: [number, number, number];
 }
-export function Wall({ position, scale }: WallProps) {
+export function Wall({ position, size }: WallProps) {
     const [
         albedo,
         ao,
@@ -26,13 +26,13 @@ export function Wall({ position, scale }: WallProps) {
 
     const [ref] = useBox<any>(() => ({
         position,
-        args: scale,
+        args: size,
         type: 'Static',
     }));
 
     return (
         <Instances limit={1000} ref={ref}>
-            <boxGeometry args={scale} />
+            <boxGeometry args={size} />
             <meshStandardMaterial
                 map={albedo}
                 aoMap={ao}
@@ -44,7 +44,7 @@ export function Wall({ position, scale }: WallProps) {
                 roughnessMap={roughness}
                 roughness={0.5}
             />
-            <Instance position={position} scale={scale} />
+            <Instance position={position} scale={size} />
         </Instances>
     );
 }
