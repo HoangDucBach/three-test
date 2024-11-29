@@ -1,28 +1,37 @@
 import { useThree, useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
 import * as THREE from 'three';
+import { useEffect } from 'react';
 
 export function RaycasterHelper() {
-    const { camera, mouse } = useThree();
-    const raycaster = useRef(new THREE.Raycaster());
-    const lineRef = useRef<THREE.Line>(null);
+    const { camera, pointer, scene, raycaster } = useThree();
 
-    useFrame(() => {
-        raycaster.current.setFromCamera(mouse, camera);
+    function onPointerMove(event: PointerEvent) {
+        pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    }
 
-        const origin = raycaster.current.ray.origin;
-        const direction = raycaster.current.ray.direction.clone().multiplyScalar(10);
+    useEffect(() => {
+        window.addEventListener('pointermove', onPointerMove);
+        return () => {
+            window.removeEventListener('pointermove', onPointerMove);
+        };
+    }, []);
 
-        if (lineRef.current) {
-            const points = [origin, origin.clone().add(direction)];
-            lineRef.current.geometry.setFromPoints(points);
-        }
-    });
+    // useFrame(() => {
+    //     raycaster.setFromCamera(pointer, camera);
+
+    //     const intersects = raycaster.intersectObjects(scene.children);
+    //     for (const intersect of intersects) {
+    //         if (intersect.object instanceof THREE.Mesh) {
+    //             const material = (intersect.object as THREE.Mesh).material as THREE.Material;
+    //             if (material instanceof THREE.MeshBasicMaterial) {
+    //                 material.color.set('red');
+    //             }
+    //         }
+    //     }
+    // });
 
     return (
-        <line ref={lineRef as any}>
-            <bufferGeometry />
-            <lineBasicMaterial color="red" />
-        </line>
+        <group />
     );
 }

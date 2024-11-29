@@ -1,171 +1,105 @@
 import { useRef, useState, useEffect } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { useTexture } from "@react-three/drei";
-import { WallProps } from "./Wall";
+import { useBox, usePointToPointConstraint, useSphere } from "@react-three/cannon";
+import { useMousePick } from "../../hook/useMousePick";
+import { CollisionFilterGroup } from "../../type";
 
-export interface FrameProps extends React.ComponentProps<"mesh"> {
-    src: string;
-    wall: WallProps; // Wall that picture frame is on
-    side?: "front" | "back" | "left" | "right";
-    u?: number; // U horizontal coordinate
-    v?: number; // V vertical coordinate
-    frames: FrameProps[]; // All frames in the scene
+interface FrameProps {
+    position: [number, number, number];
 }
 
-let movingFrameRef: THREE.Mesh | null = null;
+export function Frame({ position }: FrameProps) {
+    const { camera, raycaster } = useThree();
 
-export function Frame({ ...props }: FrameProps) {
-    const {
-        src,
-        wall,
-        side = "front",
-        u = 0,
-        v = 0,
-        frames,
-    } = props;
-    const { camera, raycaster, mouse } = useThree();
+    const parentRef = useRef<THREE.Mesh>();
 
-    const frameRef = useRef<THREE.Mesh | null>(null);
+    const [ref, api] = useBox<THREE.Mesh>(() => ({
+        mass: 1,
+        type: "Static",
+        position,
+        collisionFilterGroup: CollisionFilterGroup.Picture
+    }));
 
-    const [canMove, setCanMove] = useState(false);
-    const [currentPosition, setCurrentPosition] = useState(new THREE.Vector3());
-    const [isHovered, setIsHovered] = useState(false);
 
-    const detailPanel = document.getElementById("picture-details-panel");
+    const showClickMarkerRef = useRef(false);
+    const isPickRef = useRef(false);
 
-    const [normal] = useTexture([src]);
+    const handleMouseClick = (event: MouseEvent) => {
+        if (!ref.current) return;
 
-    const DEFAULT_SCALE = new THREE.Vector3(1, 1, 0.1);
+        const intersection = raycaster.intersectObject(ref.current, true);
 
-    const checkCollision = (newPosition: THREE.Vector3) => {
-        const currentBox = new THREE.Box3().setFromCenterAndSize(
-            newPosition,
-            DEFAULT_SCALE
-        );
-
-        for (const otherFrame of frames) {
-            if (otherFrame !== props) {
-                const otherBox = new THREE.Box3().setFromCenterAndSize(
-                    getPosition(new THREE.Vector3(...otherFrame.wall.position), new THREE.Vector3(...otherFrame.wall.size)),
-                    DEFAULT_SCALE
-                );
-
-                if (currentBox.intersectsBox(otherBox)) {
-                    return true;
-                }
+        if (intersection.length > 0) {
+            // Nếu đang kéo và thả Frame
+            if (isPickRef.current) {
+                isPickRef.current = false; // Thả
+            } else {
+                isPickRef.current = true; // Cầm lên
             }
         }
-        return false;
-    };
-
-    const getWallPlane = () => {
-        const wallPosition = new THREE.Vector3(...wall.position);
-        const normal = new THREE.Vector3();
-
-        switch (side) {
-            case "front":
-                normal.set(0, 0, 1);
-                break;
-            case "back":
-                normal.set(0, 0, -1);
-                break;
-            case "left":
-                normal.set(-1, 0, 0);
-                break;
-            case "right":
-                normal.set(1, 0, 0);
-                break;
-        }
-
-        const plane = new THREE.Plane();
-        plane.setFromNormalAndCoplanarPoint(normal, wallPosition);
-
-        return plane;
-    };
-
-    const getPosition = (position: THREE.Vector3, size: THREE.Vector3) => {
-        const wallPosition = position.clone();
-        const wallScale = size.clone();
-
-        const newPosition = new THREE.Vector3();
-
-        switch (side) {
-            case "front": // Plane xy
-                newPosition.set(
-                    THREE.MathUtils.clamp(wallPosition.x + u, wallPosition.x - wallScale.x, wallPosition.x + wallScale.x),
-                    THREE.MathUtils.clamp(wallPosition.y + v, wallPosition.y - wallScale.y, wallPosition.y + wallScale.y),
-                    wallPosition.z + wallScale.z / 2
-                );
-                break;
-        }
-
-        return newPosition;
     };
 
     useEffect(() => {
-        setCurrentPosition(getPosition(new THREE.Vector3(...wall.position), new THREE.Vector3(...wall.size)));
+        if (ref.current) {
+            parentRef.current = ref.current.parent as THREE.Mesh;
+        }
+    }, [ref.current]);
+
+    useEffect(() => {
+        window.addEventListener("click", handleMouseClick);
+        return () => {
+            window.removeEventListener("click", handleMouseClick);
+        };
     }, []);
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key.toLowerCase() === "m" && isHovered) {
-                if (canMove) {
-                    setCanMove(false);
-                    movingFrameRef = null;
-                } else if (!movingFrameRef) {
-                    setCanMove(true);
-                    movingFrameRef = frameRef.current;
-                }
-            }
-        };
-
-        if (isHovered) {
-            detailPanel!.style.display = "block";
-        } else {
-            detailPanel!.style.display = "none";
-        }
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [isHovered, canMove]);
-
     useFrame(() => {
-        if (canMove && frameRef.current === movingFrameRef) {
-            const plane = getWallPlane();
-            const intersection = new THREE.Vector3();
+        if (!ref.current) return;
+        if (!parentRef.current) return;
 
-            raycaster.setFromCamera(mouse, camera);
-            if (raycaster.ray.intersectPlane(plane, intersection)) {
-                const newPosition = new THREE.Vector3(
-                    THREE.MathUtils.clamp(intersection.x, wall.position[0] - wall.size[0], wall.position[0] + wall.size[0]),
-                    THREE.MathUtils.clamp(intersection.y, wall.position[1] - wall.size[1], wall.position[1] + wall.size[1]),
-                    intersection.z + wall.size[2] / 2
-                );
+        const worldPosition = new THREE.Vector3();
+        parentRef.current.getWorldPosition(worldPosition);
 
-                if (!checkCollision(newPosition)) {
-                    if (frameRef.current) {
-                        frameRef.current.position.copy(newPosition);
-                    }
-                }
-            }
-        } else if (frameRef.current) {
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObject(frameRef.current);
-            setIsHovered(intersects.length > 0);
+        const intersection = raycaster.intersectObject(ref.current, true);
+        const distanceFromCamera = worldPosition.distanceTo(camera.position);
+
+        if (intersection.length > 0 && distanceFromCamera < 3) {
+            showClickMarkerRef.current = true;
+        } else {
+            showClickMarkerRef.current = false;
         }
+
+        if (isPickRef.current) {
+            // Tìm giao điểm giữa ray và các đối tượng có thể đặt
+            const intersects = raycaster.intersectObject(ref.current, true);
+
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+
+                api.position.set(point.x, point.y, point.z);
+            }
+        }
+        api.position.subscribe((position) => {
+            ref.current?.position.set(position[0], position[1], position[2]);
+        });
     });
 
     return (
-        <mesh
-            ref={frameRef}
-            position={currentPosition}
-        >
-            <boxGeometry args={DEFAULT_SCALE.toArray()} />
-            <meshStandardMaterial color={canMove ? "gray" : "lightblue"} />
-            <meshStandardMaterial map={normal} />
-        </mesh>
+        <>
+            <mesh ref={ref} castShadow>
+                <boxGeometry args={[0.05, 1, 1]} />
+                <meshPhysicalMaterial
+                    color="white"
+                    metalness={0.3}
+                    roughness={0.4}
+                />
+            </mesh>
+            {showClickMarkerRef.current && (
+                <mesh position={position}>
+                    <sphereGeometry args={[0.1, 32, 32]} />
+                    <meshBasicMaterial color="red" />
+                </mesh>
+            )}
+        </>
     );
 }

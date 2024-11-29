@@ -1,114 +1,87 @@
+import { usePersonControls } from '../hook/usePersonControls';
 import { PointerLockControls } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
-import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
+import { useRef, useEffect } from 'react';
+import { useBox } from '@react-three/cannon';
+import { CollisionFilterGroup } from '../type';
 
-interface ControlProps extends React.ComponentProps<typeof PointerLockControls> {
-    wallPositions?: [number, number, number][];
-}
-
-export function Control({ wallPositions }: ControlProps) {
+export function Control() {
+    const { forward, backward, left, right, sprint } = usePersonControls();
     const { camera, gl } = useThree();
+
+    const [ref, api] = useBox<THREE.Mesh>(
+        () => ({
+            mass: 1,
+            position: [0, 1, 0],
+            type: 'Dynamic',
+            args: [0.5, 1, 0.5],
+            collisionFilterGroup: CollisionFilterGroup.Default,
+            collisionFilterMask: CollisionFilterGroup.Wall | CollisionFilterGroup.Ground,
+        }),
+    );
     const controlsRef = useRef<any>(null);
 
-    const moveSpeed = 5;
-    const verticalSpeed = 5;
+    const movementSpeed = 3;
 
-    const keys = useRef({
-        w: false,
-        a: false,
-        s: false,
-        d: false,
-        " ": false,
-        shift: false,
-    });
+    // Sử dụng Vector3 để lưu trữ tốc độ di chuyển và hướng
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
 
-    const checkCollision = (newPosition: THREE.Vector3) => {
-        if (!wallPositions) return false;
+    useEffect(() => {
+        // Đảm bảo khi bắt đầu game sẽ tự động kích hoạt Pointer Lock
+        const handlePointerLock = () => {
+            if (!document.pointerLockElement) {
+                gl.domElement.requestPointerLock();
+            }
+        };
 
-        const ray = new THREE.Raycaster(camera.position, newPosition.clone().sub(camera.position).normalize(), 0, 1);
+        document.addEventListener('click', handlePointerLock);
 
-        // Map các wallPositions thành mesh và kiểm tra va chạm
-        const walls = wallPositions.map((position) => {
-            const geometry = new THREE.BoxGeometry(1, 1, 1); // Tạo geometry phù hợp
-            const material = new THREE.MeshBasicMaterial({ visible: false }); // Chỉ cần collision, không cần hiển thị
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(...position);
-            return mesh;
+        return () => {
+            document.removeEventListener('click', handlePointerLock);
+        };
+    }, [gl]);
+
+    useFrame(() => {
+        if (!ref.current) return;
+
+        const cameraDirection = new THREE.Vector3();
+        const cameraRight = new THREE.Vector3();
+        const cameraDirectionXZ = new THREE.Vector3();
+        const perpendicularCameraDirectionXZ = new THREE.Vector3();
+
+        camera.getWorldDirection(cameraDirection);
+        camera.getWorldDirection(cameraRight).cross(cameraDirection);
+        cameraDirectionXZ.copy(cameraDirection).setY(0).normalize();
+        perpendicularCameraDirectionXZ.copy(cameraDirectionXZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+
+        if (direction.length() > 0) direction.normalize();
+        direction.set(cameraDirectionXZ.x, 0, cameraDirectionXZ.z).normalize();
+
+        if (forward) velocity.set(movementSpeed * direction.x, 0, movementSpeed * direction.z);
+        if (backward) velocity.set(-movementSpeed * direction.x, 0, -movementSpeed * direction.z);
+        if (left) velocity.set(movementSpeed * perpendicularCameraDirectionXZ.x, 0, movementSpeed * perpendicularCameraDirectionXZ.z);
+        if (right) velocity.set(-movementSpeed * perpendicularCameraDirectionXZ.x, 0, -movementSpeed * perpendicularCameraDirectionXZ.z);
+
+
+        camera.position.setY(1);
+
+        api.velocity.set(velocity.x, velocity.y, velocity.z);
+        api.rotation.copy(camera.rotation);
+        api.position.subscribe((position) => {
+            ref.current?.position.set(position[0], position[1], position[2]);
+            camera.position.set(position[0], position[1], position[2]);
         });
-
-        // Kiểm tra va chạm
-        const intersects = ray.intersectObjects(walls);
-        return intersects.length > 0;
-    }
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            const key = event.key.toLowerCase() as keyof typeof keys.current;
-            if (key in keys.current) {
-                keys.current[key] = true;
-            }
-        };
-
-        const handleKeyUp = (event: KeyboardEvent) => {
-            const key = event.key.toLowerCase() as keyof typeof keys.current;
-            if (key in keys.current) {
-                keys.current[key] = false;
-            }
-        };
-
-        document.addEventListener("keydown", handleKeyDown);
-        document.addEventListener("keyup", handleKeyUp);
-
-        return () => {
-            document.removeEventListener("keydown", handleKeyDown);
-            document.removeEventListener("keyup", handleKeyUp);
-        };
-    }, []);
-
-    useFrame((_, deltaTime) => {
-        if (!controlsRef.current?.isLocked) return;
-
-        const moveDistance = moveSpeed * deltaTime;
-        const verticalDistance = verticalSpeed * deltaTime;
-
-        const newPosition = camera.position.clone();
-
-        const direction = new THREE.Vector3();
-        camera.getWorldDirection(direction);
-        direction.y = 0;
-        direction.normalize();
-
-        if (keys.current.w) newPosition.add(direction.multiplyScalar(moveDistance));
-        if (keys.current.s) newPosition.sub(direction.multiplyScalar(moveDistance));
-        if (keys.current.a) newPosition.sub(direction.cross(camera.up).multiplyScalar(moveDistance));
-        if (keys.current.d) newPosition.add(direction.cross(camera.up).multiplyScalar(moveDistance));
-
-        if (keys.current[" "]) newPosition.y += verticalDistance;
-        if (keys.current.shift) newPosition.y -= verticalDistance;
-
-        camera.position.copy(newPosition);
-
-        if (!checkCollision(newPosition)) {
-            camera.position.copy(newPosition);
-        }
     });
-
-    useEffect(() => {
-        const handleUnlock = () => {
-            controlsRef.current?.lock();
-        };
-
-        controlsRef.current?.addEventListener("unlock", handleUnlock);
-
-        return () => {
-            controlsRef.current?.removeEventListener("unlock", handleUnlock);
-        };
-    }, []);
 
     return (
         <>
-            <PointerLockControls ref={controlsRef} args={[camera, gl.domElement]} />
+            <mesh ref={ref} />
+            <PointerLockControls
+                ref={controlsRef}
+                args={[camera, gl.domElement]}
+            />
         </>
     );
 }

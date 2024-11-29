@@ -1,4 +1,8 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import { useThree } from '@react-three/fiber';
+import * as THREE from 'three';
+import { useHelper } from '@react-three/drei';
+import { PointLightHelper, SpotLightHelper } from 'three';
 
 interface LightProps extends React.ComponentProps<'group'> {
     ambientLightIntensity?: number;
@@ -13,35 +17,41 @@ interface LightProps extends React.ComponentProps<'group'> {
 
 export function Light({
     ambientLightIntensity = 1,
-    directionalLightPosition = [5, 10, 5],
+    directionalLightPosition = [0, 5, 0],
     directionalLightIntensity = 1,
     pointLightPosition = [0, 5, 0],
     pointLightIntensity = 1,
-    spotLightPosition = [0, 10, 0],
+    spotLightPosition = [0, 100, 0],
     spotLightIntensity = 1,
     spotLightAngle = Math.PI / 4,
 }: LightProps) {
+    const directionalLightRef = useRef<any>(null);
+    const pointLightRef = useRef<any>(null);
+    const spotLightRef = useRef<any>(null);
+    useHelper(directionalLightRef, THREE.DirectionalLightHelper, 1, 'red');
+    useHelper(pointLightRef, PointLightHelper, 1, 'blue');
+    useHelper(spotLightRef, SpotLightHelper, 'green');
+
     return (
         <>
             <ambientLight intensity={ambientLightIntensity} />
 
-            <directionalLight
+            {/* <directionalLight
+                ref={directionalLightRef}
                 position={directionalLightPosition}
                 intensity={directionalLightIntensity}
-                castShadow
-            />
-
+            /> */}
             <pointLight
+                ref={pointLightRef}
                 position={pointLightPosition}
                 intensity={pointLightIntensity}
-                castShadow
             />
-
             <spotLight
+                ref={spotLightRef}
                 position={spotLightPosition}
+                color={'blue'}
                 intensity={spotLightIntensity}
-                angle={spotLightAngle}
-                castShadow
+                distance={100}
             />
         </>
     );

@@ -10,11 +10,11 @@ type Texture = {
 }
 export const TEXTURES: Texture = {
     WALL: {
-        albedo: new URL('./modern-fractured-wallpaper_albedo.png', import.meta.url).href,
-        ao: new URL('./modern-fractured-wallpaper_ao.png', import.meta.url).href,
-        height: new URL('./modern-fractured-wallpaper_height.png', import.meta.url).href,
-        metallic: new URL('./modern-fractured-wallpaper_metallic.png', import.meta.url).href,
-        normal: new URL('./modern-fractured-wallpaper_normal-ogl.png', import.meta.url).href,
-        roughness: new URL('./modern-fractured-wallpaper_roughness.png', import.meta.url).href,
+        albedo: new URL('./fiber-textured-wall1_albedo.png', import.meta.url).href,
+        ao: new URL('./fiber-textured-wall1_ao.png', import.meta.url).href,
+        height: new URL('./fiber-textured-wall1_height.png', import.meta.url).href,
+        metallic: new URL('./fiber-textured-wall1_metallic.png', import.meta.url).href,
+        normal: new URL('./fiber-textured-wall1_normal-ogl.png', import.meta.url).href,
+        roughness: new URL('./fiber-textured-wall1_roughness.png', import.meta.url).href,
     }
 }

@@ -1,21 +1,34 @@
-import { useTexture } from '@react-three/drei';
-import { Instances, Instance } from '@react-three/drei';
-import { useBox } from '@react-three/cannon';
-import { TEXTURES } from '../../../../assets/textures/textures';
+import { useRef } from "react";
+import { useBox } from "@react-three/cannon";
+import { useLoader } from "@react-three/fiber";
+import * as THREE from "three";
+import { TEXTURES } from "../../../../assets/textures/textures";
+import { CollisionFilterGroup } from "../../type";
 
-export interface WallProps extends React.ComponentProps<'mesh'> {
+
+interface WallProps {
     position: [number, number, number];
-    size: [number, number, number];
+    args: [number, number, number];
+    children?: React.ReactNode;
 }
-export function Wall({ position, size }: WallProps) {
+
+export function Wall({ position, args, children }: WallProps) {
+    const [ref] = useBox<THREE.Mesh>(() => ({
+        mass: 0,
+        args,
+        position: [position[0], args[1] / 2, position[2]],
+        type: "Static",
+        collisionFilterGroup: CollisionFilterGroup.Wall,
+    }));
+
     const [
-        albedo,
-        ao,
-        height,
-        metallic,
-        normal,
-        roughness,
-    ] = useTexture([
+        albedoMap,
+        aoMap,
+        displacementMap,
+        metallicMap,
+        normalMap,
+        roughnessMap
+    ] = useLoader(THREE.TextureLoader, [
         TEXTURES.WALL.albedo!.toString(),
         TEXTURES.WALL.ao!.toString(),
         TEXTURES.WALL.height!.toString(),
@@ -24,27 +37,22 @@ export function Wall({ position, size }: WallProps) {
         TEXTURES.WALL.roughness!.toString(),
     ]);
 
-    const [ref] = useBox<any>(() => ({
-        position,
-        args: size,
-        type: 'Static',
-    }));
-
     return (
-        <Instances limit={1000} ref={ref}>
-            <boxGeometry args={size} />
+        <mesh ref={ref} castShadow receiveShadow>
+            <boxGeometry args={args} />
             <meshStandardMaterial
-                map={albedo}
-                aoMap={ao}
-                displacementMap={height}
+                map={albedoMap}
+                displacementMap={displacementMap}
                 displacementScale={0}
-                metalnessMap={metallic}
-                metalness={0}
-                normalMap={normal}
-                roughnessMap={roughness}
+                metalnessMap={metallicMap}
+                metalness={0.5}
+                normalMap={normalMap}
+                roughnessMap={roughnessMap}
                 roughness={0.5}
+                lightMap={aoMap}
+                lightMapIntensity={1}
             />
-            <Instance position={position} scale={size} />
-        </Instances>
+            {children}
+        </mesh>
     );
 }
